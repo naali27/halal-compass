@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   MapPin, Search, SlidersHorizontal, Bookmark, Home, Map as MapIcon, User,
   List, Star, Check, CheckCircle2, ChevronLeft, ChevronRight, X, Clock,
@@ -34,13 +34,19 @@ const C = {
   cardShadow: "0 4px 16px rgba(16,40,30,0.06)",
 };
 
+function trackEvent(eventName, params = {}) {
+  if (typeof window !== "undefined" && typeof window.gtag === "function") {
+    window.gtag("event", eventName, params);
+  }
+}
+
 const PLACES = {
   kimchi: {
     id: "kimchi", name: "Kimchi House Korean BBQ", type: "restaurant",
     cuisine: "Korean • BBQ", tags: ["Korean", "BBQ", "Asian"],
     rating: 4.2, reviews: 248, price: "$$", distance: "0.8 km", time: "5 min",
     certified: true, certBy: "HCCA", certDate: "Nov 15, 2025",
-    address: "123 Main Street, Downtown", hours: "Open • Closes 10:00 PM",
+    address: "123 Main Street, Downtown", hours: "Open • Closes 10:00 PM", openNow: true,
     cuisineLabel: "Korean",
   },
   market: {
@@ -48,7 +54,7 @@ const PLACES = {
     cuisine: "Grocery • Deli", tags: ["Fresh Meat", "Frozen", "Snacks"],
     rating: 4.4, reviews: 87, price: "$", distance: "0.5 km", time: "3 min",
     certified: true, certBy: "ISNA", certDate: "Nov 18, 2025",
-    address: "456 Market Street, Downtown", hours: "Open • Closes 9:00 PM",
+    address: "456 Market Street, Downtown", hours: "Open • Closes 9:00 PM", openNow: true,
     priceLabel: "Affordable",
   },
   pasta: {
@@ -56,7 +62,7 @@ const PLACES = {
     cuisine: "Italian • Pasta", tags: ["Italian", "Pasta"],
     rating: 4.7, reviews: 192, price: "$$$", distance: "1.2 km", time: "8 min",
     certified: true, certBy: "HMA", certDate: "Nov 10, 2025", promo: true,
-    address: "78 Dundas Street W, Downtown", hours: "Open • Closes 11:00 PM",
+    address: "78 Dundas Street W, Downtown", hours: "Closed • Opens 5:00 PM", openNow: false,
   },
   seoul: {
     id: "seoul", name: "Seoul Garden", type: "restaurant",
@@ -64,10 +70,31 @@ const PLACES = {
     rating: 4.5, reviews: 156, price: "$$", distance: "1.4 km", time: "9 min",
     certified: true, certBy: "IFANCA", certDate: "Nov 8, 2025",
     certNumber: "ISNA-2025-SG-00123",
-    address: "210 Queen Street W, Downtown", hours: "Open • Closes 10:30 PM",
+    address: "210 Queen Street W, Downtown", hours: "Open • Closes 10:30 PM", openNow: true,
+  },
+  jerk: {
+    id: "jerk", name: "Island Spice Jerk Grill", type: "restaurant",
+    cuisine: "Jamaican • Grill", tags: ["Jamaican", "Jerk", "Caribbean"],
+    rating: 4.6, reviews: 121, price: "$$", distance: "1.7 km", time: "11 min",
+    certified: true, certBy: "HMA", certDate: "Nov 12, 2025",
+    address: "88 College Street, Downtown", hours: "Open • Closes 10:00 PM", openNow: true,
+  },
+  sushi: {
+    id: "sushi", name: "Sakura Halal Sushi", type: "restaurant",
+    cuisine: "Japanese • Sushi", tags: ["Japanese", "Sushi", "Asian"],
+    rating: 4.3, reviews: 98, price: "$$", distance: "2.0 km", time: "13 min",
+    certified: true, certBy: "ISNA", certDate: "Nov 14, 2025",
+    address: "312 King Street W, Downtown", hours: "Closed • Opens 4:00 PM", openNow: false,
   },
 };
-const LIST = [PLACES.kimchi, PLACES.market, PLACES.pasta, PLACES.seoul];
+const LIST = [PLACES.kimchi, PLACES.market, PLACES.pasta, PLACES.seoul, PLACES.jerk, PLACES.sushi];
+
+const DEFAULT_FILTERS = {
+  certOnly: true,
+  placeType: "All",
+  openNow: false,
+  cuisines: [],
+};
 
 const CUISINES = [
   { name: "Korean", flag: "🇰🇷", count: 12, hot: true },
@@ -90,10 +117,26 @@ const NOTIFS = [
 ];
 
 const FAQ = [
-  { q: "What makes a restaurant halal certified?", section: "Certification" },
-  { q: "How often are certificates verified?", section: "Certification" },
-  { q: "How do I search for halal restaurants near me?", section: "Using the App" },
-  { q: "Can I save my favorite places?", section: "Using the App" },
+  {
+    q: "What makes a restaurant halal certified?",
+    section: "Certification",
+    a: "A certified place has halal documentation from a recognized certifying organization. In this prototype, certification details are shown on each place page and certificate screen.",
+  },
+  {
+    q: "How often are certificates verified?",
+    section: "Certification",
+    a: "Halal Compass shows the most recent verification date available for each listing. This prototype uses sample dates to demonstrate how users would check certification recency.",
+  },
+  {
+    q: "How do I search for halal restaurants near me?",
+    section: "Using the App",
+    a: "Use the search bar on the results page to search by cuisine, restaurant name, grocery type, or tag. You can also use filters to narrow the list.",
+  },
+  {
+    q: "Can I save my favorite places?",
+    section: "Using the App",
+    a: "Yes. Tap the bookmark icon on a restaurant or grocery page. Saved places appear in the Saved tab and stay saved on this device.",
+  },
 ];
 
 /* ----------------------- shared UI ----------------------- */
@@ -182,6 +225,48 @@ function PrimaryBtn({ children, onClick, icon: Icon, style }) {
   );
 }
 
+function CourseDisclaimer() {
+  return (
+    <div
+      className="rounded-2xl border px-3.5 py-3 text-left"
+      style={{
+        background: "rgba(255,255,255,0.68)",
+        borderColor: C.creamBorder,
+        boxShadow: C.cardShadow,
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <ShieldCheck size={16} color={C.green} className="mt-0.5 flex-shrink-0" />
+        <div>
+          <div className="text-[12px] font-bold" style={{ color: C.text }}>
+            Course project notice
+          </div>
+          <div className="mt-0.5 text-[11px] leading-relaxed" style={{ color: C.sub }}>
+            This website is for an MSE 543 course project and collects interaction data,
+            such as page visits and clicks, to evaluate user experience.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Toast({ message }) {
+  if (!message) return null;
+
+  return (
+    <div className="pointer-events-none absolute inset-x-4 bottom-20 z-30 flex justify-center">
+      <div
+        className="flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg"
+        style={{ background: C.greenDeep }}
+      >
+        <CheckCircle2 size={16} color="#fff" />
+        {message}
+      </div>
+    </div>
+  );
+}
+
 /* ----------------------- screens ----------------------- */
 
 function Landing({ go }) {
@@ -218,7 +303,9 @@ function Landing({ go }) {
           ))}
         </div>
 
-        <div className="mt-auto w-full space-y-3 pb-8 pt-8">
+        <div className="mt-auto w-full space-y-3 pb-8 pt-6">
+          <CourseDisclaimer />
+
           <PrimaryBtn icon={LocateFixed} onClick={() => go("home")}>Use Current Location</PrimaryBtn>
           <button onClick={() => go("home")}
             className="flex w-full items-center justify-center gap-2 rounded-2xl border bg-white/60 py-3.5 text-[15px] font-semibold"
@@ -231,7 +318,7 @@ function Landing({ go }) {
   );
 }
 
-function HomeScreen({ go }) {
+function HomeScreen({ go, setQuery, resetFilters }) {
   return (
     <div className="flex h-full flex-col bg-white">
       <StatusBar />
@@ -254,7 +341,7 @@ function HomeScreen({ go }) {
           </div>
         </div>
 
-        <button onClick={() => go("list")}
+        <button onClick={() => { setQuery(""); resetFilters(); go("list"); }}
           className="mt-4 flex w-full items-center gap-3 rounded-2xl border bg-white px-4 py-3.5"
           style={{ borderColor: C.line, boxShadow: C.cardShadow }}>
           <span className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: C.certBg }}>
@@ -272,7 +359,7 @@ function HomeScreen({ go }) {
 
         <div className="mt-3 grid grid-cols-2 gap-3">
           {CUISINES.map((c) => (
-            <button key={c.name} onClick={() => go("list")}
+            <button key={c.name} onClick={() => { setQuery(c.name); resetFilters(); go("list"); }}
               className="relative flex flex-col items-center rounded-2xl border bg-white p-4"
               style={{ borderColor: C.line, boxShadow: C.cardShadow }}>
               {c.hot && (
@@ -317,53 +404,266 @@ function ListCard({ p, go, open }) {
   );
 }
 
-function ListScreen({ go, ctx }) {
+function ListScreen({ go, back, ctx, query, setQuery, filters, setFilters }) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const filteredPlaces = LIST.filter((p) => {
+    const searchableText = [
+      p.name,
+      p.type,
+      p.cuisine,
+      p.price,
+      p.address,
+      p.certBy,
+      ...(p.tags || []),
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    const matchesSearch = !normalizedQuery || searchableText.includes(normalizedQuery);
+    const matchesCertification = !filters.certOnly || p.certified;
+    const matchesPlaceType =
+      filters.placeType === "All" ||
+      (filters.placeType === "Restaurants" && p.type === "restaurant") ||
+      (filters.placeType === "Grocery" && p.type === "grocery");
+    const matchesOpenNow = !filters.openNow || p.openNow;
+    const matchesCuisine =
+      filters.cuisines.length === 0 ||
+      filters.cuisines.some((c) => searchableText.includes(c.toLowerCase()));
+
+    return matchesSearch && matchesCertification && matchesPlaceType && matchesOpenNow && matchesCuisine;
+  });
+
+  const resultLabel = `${filteredPlaces.length} place${filteredPlaces.length === 1 ? "" : "s"} found`;
+
+  useEffect(() => {
+    if (!normalizedQuery) return;
+
+    const timeoutId = setTimeout(() => {
+      trackEvent("search_performed", {
+        search_query: query.trim(),
+        result_count: filteredPlaces.length,
+        certified_only: filters.certOnly,
+        place_type: filters.placeType,
+        open_now: filters.openNow,
+        cuisines: filters.cuisines.join(",") || "none",
+      });
+    }, 700);
+
+    return () => clearTimeout(timeoutId);
+  }, [normalizedQuery, query, filteredPlaces.length, filters.certOnly, filters.placeType, filters.openNow, filters.cuisines]);
+
+  const toggleCuisineFilter = (cuisine) => {
+    setFilters((current) => ({
+      ...current,
+      cuisines: current.cuisines.includes(cuisine)
+        ? current.cuisines.filter((c) => c !== cuisine)
+        : [...current.cuisines, cuisine],
+    }));
+  };
+
+  const hasActiveExtraFilters =
+    filters.openNow || filters.placeType !== "All" || filters.cuisines.length > 0;
+
+  const handleSearchChange = (e) => {
+    setQuery(e.target.value);
+
+    // Keep typed search predictable. If a user starts a new search while older
+    // filters are still active, clear the extra filters so the query is not
+    // accidentally blocked by a previous cuisine/type/open-now selection.
+    if (hasActiveExtraFilters) {
+      setFilters(DEFAULT_FILTERS);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col bg-white">
       <StatusBar />
+
       <div className="px-4 pb-3 pt-1">
-        <div className="flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 rounded-full border px-3.5 py-2.5"
-            style={{ borderColor: C.line }}>
-            <Search size={16} color={C.faint} />
-            <span className="text-[13px]" style={{ color: C.faint }}>Search halal food or grocery</span>
+        <div className="mb-3 flex items-center gap-2">
+          <button
+            onClick={back}
+            className="-ml-1 flex h-9 w-9 items-center justify-center"
+            aria-label="Go back"
+          >
+            <ChevronLeft size={24} color={C.text} />
+          </button>
+
+          <div>
+            <div className="text-[15px] font-bold" style={{ color: C.text }}>
+              Search Results
+            </div>
+            <div className="text-[12px]" style={{ color: C.sub }}>
+              Verified halal places near you
+            </div>
           </div>
-          <button onClick={() => go("filter")}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-white" style={{ background: C.green }}>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div
+            className="flex flex-1 items-center gap-2 rounded-full border px-3.5 py-2.5"
+            style={{ borderColor: C.line }}
+          >
+            <Search size={16} color={C.faint} />
+            <input
+              value={query}
+              onChange={handleSearchChange}
+              placeholder="Search halal food or grocery"
+              className="w-full bg-transparent text-[13px] outline-none"
+              style={{ color: C.text }}
+            />
+            {query && (
+              <button
+                onClick={() => setQuery("")}
+                className="flex h-5 w-5 items-center justify-center rounded-full"
+                style={{ background: "#F3F4F6" }}
+                aria-label="Clear search"
+              >
+                <X size={12} color={C.faint} />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => go("filter")}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-white"
+            style={{ background: C.green }}
+            aria-label="Open filters"
+          >
             <SlidersHorizontal size={17} />
           </button>
         </div>
+
         <div className="mt-3 flex items-center justify-between">
-          <span className="text-[13px] font-semibold" style={{ color: C.sub }}>48 places found</span>
-          <button onClick={() => go("map")} className="flex items-center gap-1 text-[13px] font-semibold" style={{ color: C.green }}>
+          <span className="text-[13px] font-semibold" style={{ color: C.sub }}>
+            {resultLabel}
+          </span>
+          <button
+            onClick={() => go("map")}
+            className="flex items-center gap-1 text-[13px] font-semibold"
+            style={{ color: C.green }}
+          >
             <MapIcon size={14} /> Map View
           </button>
         </div>
-        <div className="mt-3 flex gap-2 overflow-x-auto">
-          {["Certified", "Open Now", "Korean", "Distance"].map((f, i) => (
-            <span key={f}
-              className="whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12px] font-semibold"
-              style={i === 0
-                ? { background: C.green, color: "#fff" }
-                : { border: `1px solid ${C.line}`, color: C.sub }}>{f}</span>
-          ))}
+
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => setFilters((current) => ({ ...current, certOnly: !current.certOnly }))}
+            className="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12px] font-semibold"
+            style={filters.certOnly ? { background: C.green, color: "#fff" } : { border: `1px solid ${C.line}`, color: C.sub }}
+          >
+            Certified
+          </button>
+
+          <button
+            onClick={() => setFilters((current) => ({ ...current, openNow: !current.openNow }))}
+            className="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12px] font-semibold"
+            style={filters.openNow ? { background: C.green, color: "#fff" } : { border: `1px solid ${C.line}`, color: C.sub }}
+          >
+            Open Now
+          </button>
+
+          <button
+            onClick={() => setFilters((current) => ({ ...current, placeType: current.placeType === "Grocery" ? "All" : "Grocery" }))}
+            className="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12px] font-semibold"
+            style={filters.placeType === "Grocery" ? { background: C.green, color: "#fff" } : { border: `1px solid ${C.line}`, color: C.sub }}
+          >
+            Grocery
+          </button>
+
+          {["Korean", "Italian", "Jamaican", "Japanese"].map((f) => {
+            const active = filters.cuisines.includes(f);
+            return (
+              <button
+                key={f}
+                onClick={() => toggleCuisineFilter(f)}
+                className="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12px] font-semibold"
+                style={active ? { background: C.green, color: "#fff" } : { border: `1px solid ${C.line}`, color: C.sub }}
+              >
+                {f}
+              </button>
+            );
+          })}
+
+          {hasActiveExtraFilters && (
+            <button
+              onClick={() => setFilters(DEFAULT_FILTERS)}
+              className="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12px] font-semibold"
+              style={{ border: `1px solid ${C.line}`, color: C.green }}
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
       </div>
+
       <div className="flex-1 space-y-3 overflow-y-auto px-4 pb-4">
-        {LIST.map((p) => (
-          <ListCard key={p.id} p={p} go={go} open={() => { ctx.setActive(p); go(p.type === "grocery" ? "grocery" : "restaurant"); }} />
-        ))}
+        {filteredPlaces.length === 0 ? (
+          <div className="mt-16 rounded-2xl border px-5 py-8 text-center" style={{ borderColor: C.line }}>
+            <Search size={34} color={C.faint} className="mx-auto" />
+            <div className="mt-3 text-[14px] font-semibold" style={{ color: C.text }}>
+              No places found
+            </div>
+            <div className="mt-1 text-[12px] leading-relaxed" style={{ color: C.sub }}>
+              Try changing your search or clearing a few filters.
+            </div>
+            <div className="mt-4 flex justify-center gap-2">
+              <button
+                onClick={() => setQuery("")}
+                className="rounded-xl px-4 py-2 text-[13px] font-semibold"
+                style={{ border: `1px solid ${C.line}`, color: C.sub }}
+              >
+                Clear Search
+              </button>
+              <button
+                onClick={() => setFilters(DEFAULT_FILTERS)}
+                className="rounded-xl px-4 py-2 text-[13px] font-semibold text-white"
+                style={{ background: C.green }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        ) : (
+          filteredPlaces.map((p) => (
+            <ListCard
+              key={p.id}
+              p={p}
+              go={go}
+              open={() => {
+                ctx.setActive(p);
+                go(p.type === "grocery" ? "grocery" : "restaurant");
+              }}
+            />
+          ))
+        )}
       </div>
     </div>
   );
 }
 
-function FilterScreen({ go, back }) {
-  const [certOnly, setCertOnly] = useState(true);
-  const [placeType, setPlaceType] = useState("All");
-  const [openNow, setOpenNow] = useState(false);
-  const [cuisines, setCuisines] = useState(["Korean"]);
-  const toggle = (c) => setCuisines((s) => s.includes(c) ? s.filter(x => x !== c) : [...s, c]);
+function FilterScreen({ back, filters, applyFilters }) {
+  const [certOnly, setCertOnly] = useState(filters.certOnly);
+  const [placeType, setPlaceType] = useState(filters.placeType);
+  const [openNow, setOpenNow] = useState(filters.openNow);
+  const [cuisines, setCuisines] = useState(filters.cuisines);
+
+  const toggle = (c) =>
+    setCuisines((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]));
+
+  const resetDraft = () => {
+    setCertOnly(DEFAULT_FILTERS.certOnly);
+    setPlaceType(DEFAULT_FILTERS.placeType);
+    setOpenNow(DEFAULT_FILTERS.openNow);
+    setCuisines(DEFAULT_FILTERS.cuisines);
+  };
+
+  const apply = () => {
+    applyFilters({ certOnly, placeType, openNow, cuisines });
+  };
+
   return (
     <div className="flex h-full flex-col bg-white">
       <StatusBar dark />
@@ -371,7 +671,7 @@ function FilterScreen({ go, back }) {
         style={{ background: `linear-gradient(135deg, ${C.headerFrom}, ${C.headerTo})` }}>
         <button onClick={back}><X size={22} color="#fff" /></button>
         <span className="text-[15px] font-semibold text-white">Filters</span>
-        <button onClick={() => { setCertOnly(false); setPlaceType("All"); setOpenNow(false); setCuisines([]); }}
+        <button onClick={resetDraft}
           className="text-[13px] font-semibold text-white opacity-90">Reset</button>
       </div>
 
@@ -409,7 +709,7 @@ function FilterScreen({ go, back }) {
         <div className="mt-1 flex justify-between text-[11px]" style={{ color: C.faint }}><span>1 km</span><span>10 km</span></div>
 
         <button onClick={() => setOpenNow(v => !v)}
-          className="mt-5 flex w-full items-center gap-3 rounded-2xl border p-4" style={{ borderColor: C.line }}>
+          className="mt-5 flex w-full items-center gap-3 rounded-2xl border p-4" style={{ borderColor: openNow ? C.green : C.line, background: openNow ? C.certBg : "#fff" }}>
           <span className="flex h-5 w-5 items-center justify-center rounded-full border-2"
             style={{ borderColor: openNow ? C.green : "#CBD5E1", background: openNow ? C.green : "#fff" }}>
             {openNow && <Check size={12} color="#fff" />}
@@ -419,7 +719,7 @@ function FilterScreen({ go, back }) {
 
         <Section label="Cuisines" className="mt-5" />
         <div className="grid grid-cols-2 gap-2.5">
-          {["Korean", "Italian", "Mexican", "Japanese"].map((c) => (
+          {["Korean", "Italian", "Jamaican", "Japanese"].map((c) => (
             <button key={c} onClick={() => toggle(c)}
               className="rounded-xl py-2.5 text-[13px] font-semibold"
               style={cuisines.includes(c) ? { background: C.certBg, color: C.certText, border: `1px solid ${C.green}` } : { border: `1px solid ${C.line}`, color: C.sub }}>{c}</button>
@@ -427,11 +727,12 @@ function FilterScreen({ go, back }) {
         </div>
       </div>
       <div className="border-t px-4 py-3" style={{ borderColor: C.line }}>
-        <PrimaryBtn onClick={back}>Apply Filters</PrimaryBtn>
+        <PrimaryBtn onClick={apply}>Apply Filters</PrimaryBtn>
       </div>
     </div>
   );
 }
+
 function Section({ label, className = "" }) {
   return <div className={`mb-3 text-[14px] font-bold ${className}`} style={{ color: C.text }}>{label}</div>;
 }
@@ -484,9 +785,24 @@ function RestaurantDetails({ go, back, ctx }) {
 
         <InfoRow icon={MapPin} title="Address" body={p.address} />
         <InfoRow icon={Clock} title="Hours" body={p.hours} />
+          <ReviewSummary p={p} go={go} />
+        <ReviewSummary p={p} go={go} />
       </div>
-      <div className="border-t px-4 py-3" style={{ borderColor: C.line }}>
-        <PrimaryBtn icon={Navigation} onClick={() => {}} style={{ background: `linear-gradient(135deg, ${C.green}, ${C.greenDark})` }}>Get Directions</PrimaryBtn>
+      <div className="grid grid-cols-2 gap-2 border-t px-4 py-3" style={{ borderColor: C.line }}>
+        <button
+          onClick={() => go("writeReview")}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border py-3.5 text-[14px] font-semibold"
+          style={{ borderColor: C.green, color: C.green }}
+        >
+          <MessageSquare size={17} /> Write Review
+        </button>
+        <button
+          onClick={() => ctx.openDirections(p)}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[14px] font-semibold text-white active:opacity-90"
+          style={{ background: `linear-gradient(135deg, ${C.green}, ${C.greenDark})` }}
+        >
+          <Navigation size={17} /> Directions
+        </button>
       </div>
     </div>
   );
@@ -508,6 +824,31 @@ function InfoRow({ icon: Icon, title, body }) {
       <div>
         <div className="text-[13px] font-semibold" style={{ color: C.text }}>{title}</div>
         <div className="text-[12px]" style={{ color: C.sub }}>{body}</div>
+      </div>
+    </div>
+  );
+}
+
+
+function ReviewSummary({ p, go }) {
+  return (
+    <div className="mt-4 rounded-2xl border p-3.5" style={{ borderColor: C.line, background: "#fff" }}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[13px] font-bold" style={{ color: C.text }}>Reviews</div>
+          <div className="mt-0.5 flex items-center gap-2 text-[12px]" style={{ color: C.sub }}>
+            <Stars rating={p.rating} reviews={p.reviews} size={12} />
+            <span>•</span>
+            <span>Community feedback</span>
+          </div>
+        </div>
+        <button
+          onClick={() => go("placeReviews")}
+          className="shrink-0 rounded-xl px-3 py-2 text-[12px] font-semibold"
+          style={{ background: C.certBg, color: C.certText }}
+        >
+          View Reviews
+        </button>
       </div>
     </div>
   );
@@ -555,11 +896,24 @@ function GroceryDetails({ go, back, ctx }) {
             <Stat top={<span className="font-bold" style={{ color: C.text }}>{p.distance}</span>} bottom={p.time} bg="#F3F4F6" />
           </div>
           <InfoRow icon={MapPin} title="Address" body={p.address} />
-          <InfoRow icon={Clock} title="Hours" body={"Open • Closes 9:00 PM\nMon-Sat: 8:00 AM - 9:00 PM"} />
+          <InfoRow icon={Clock} title="Hours" body={p.hours} />
         </div>
       </div>
-      <div className="border-t px-4 py-3" style={{ borderColor: C.line }}>
-        <PrimaryBtn icon={Navigation}>Get Directions</PrimaryBtn>
+      <div className="grid grid-cols-2 gap-2 border-t px-4 py-3" style={{ borderColor: C.line }}>
+        <button
+          onClick={() => go("writeReview")}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border py-3.5 text-[14px] font-semibold"
+          style={{ borderColor: C.green, color: C.green }}
+        >
+          <MessageSquare size={17} /> Write Review
+        </button>
+        <button
+          onClick={() => ctx.openDirections(p)}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[14px] font-semibold text-white active:opacity-90"
+          style={{ background: C.green }}
+        >
+          <Navigation size={17} /> Directions
+        </button>
       </div>
     </div>
   );
@@ -567,29 +921,70 @@ function GroceryDetails({ go, back, ctx }) {
 
 function CertificateScreen({ back, ctx }) {
   const p = ctx.active || PLACES.seoul;
+  const certificateNumber = p.certNumber || `${p.certBy || "HC"}-2025-${p.id.toUpperCase()}-0427`;
+
+  useEffect(() => {
+    trackEvent("certificate_viewed", {
+      place_id: p.id,
+      place_name: p.name,
+      place_type: p.type,
+      certifier: p.certBy || "unknown",
+      certificate_number: certificateNumber,
+    });
+  }, [p.id, p.name, p.type, p.certBy, certificateNumber]);
+
   return (
     <div className="flex h-full flex-col bg-white">
       <StatusBar dark />
       <BackHeader title="Halal Certificate" back={back} dark />
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="flex items-center gap-3 rounded-2xl border p-4" style={{ borderColor: C.line, boxShadow: C.cardShadow }}>
-          <ShieldCheck size={22} color={C.green} />
-          <div>
-            <div className="text-[14px] font-bold" style={{ color: C.text }}>{p.name}</div>
-            <div className="text-[12px]" style={{ color: C.sub }}>Official halal certification document</div>
+        <div className="rounded-2xl border p-4" style={{ borderColor: C.green, background: C.certBg, boxShadow: C.cardShadow }}>
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white">
+              <ShieldCheck size={24} color={C.green} />
+            </span>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <div className="text-[14px] font-bold" style={{ color: C.certText }}>{p.name}</div>
+                <span className="rounded-full px-2 py-[1px] text-[10px] font-bold text-white" style={{ background: C.green }}>
+                  Active
+                </span>
+              </div>
+              <div className="mt-0.5 text-[12px] leading-relaxed" style={{ color: C.certText }}>
+                Verified halal certification for this {p.type === "grocery" ? "grocery store" : "restaurant"}.
+              </div>
+            </div>
           </div>
         </div>
-        <div className="mt-4 flex h-72 flex-col items-center justify-center rounded-2xl border-2 border-dashed" style={{ borderColor: "#D8DEE6" }}>
-          <FileCheck size={40} color={C.green} />
-          <div className="mt-3 text-[14px] font-semibold" style={{ color: C.text }}>Certificate Image</div>
-          <div className="text-[12px]" style={{ color: C.faint }}>Official Document</div>
+
+        <div className="mt-4 flex h-60 flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-white" style={{ borderColor: "#D8DEE6" }}>
+          <FileCheck size={42} color={C.green} />
+          <div className="mt-3 text-[14px] font-semibold" style={{ color: C.text }}>Certificate Preview</div>
+          <div className="mt-1 text-center text-[12px] leading-relaxed" style={{ color: C.faint }}>
+            Official document placeholder<br />for the course prototype
+          </div>
         </div>
-        <div className="mt-4 border-t pt-3" style={{ borderColor: C.line }}>
-          <div className="text-[12px]" style={{ color: C.sub }}>Certificate Number</div>
-          <div className="text-[15px] font-bold" style={{ color: C.text }}>{p.certNumber || "ISNA-2025-SG-00123"}</div>
+
+        <div className="mt-4 rounded-2xl border p-4" style={{ borderColor: C.line }}>
+          <div className="text-[13px] font-bold" style={{ color: C.text }}>Verification details</div>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <div><div className="text-[12px]" style={{ color: C.sub }}>Certified By</div><div className="text-[14px] font-semibold" style={{ color: C.text }}>{p.certBy}</div></div>
-            <div><div className="text-[12px]" style={{ color: C.sub }}>Verified</div><div className="text-[14px] font-semibold" style={{ color: C.text }}>{p.certDate}</div></div>
+            <CertDetail label="Status" value="Active" highlight />
+            <CertDetail label="Certified By" value={p.certBy || "HCCA"} />
+            <CertDetail label="Certificate No." value={certificateNumber} wide />
+            <CertDetail label="Last Verified" value={p.certDate} />
+            <CertDetail label="Valid Until" value="Nov 15, 2026" />
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl p-4" style={{ background: "#F7FCF9" }}>
+          <div className="flex items-start gap-2">
+            <CheckCircle2 size={17} color={C.green} className="mt-0.5 flex-shrink-0" />
+            <div>
+              <div className="text-[13px] font-bold" style={{ color: C.text }}>What this means</div>
+              <div className="mt-1 text-[12px] leading-relaxed" style={{ color: C.sub }}>
+                This place is marked as halal certified in Halal Compass. Users can check the certifier, certificate number, and latest verification date before deciding where to eat or shop.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -597,51 +992,237 @@ function CertificateScreen({ back, ctx }) {
   );
 }
 
-function MapScreen({ go, ctx }) {
+function CertDetail({ label, value, highlight, wide }) {
   return (
-    <div className="flex h-full flex-col" style={{ background: "#DDE5DC" }}>
+    <div className={wide ? "col-span-2" : ""}>
+      <div className="text-[11px]" style={{ color: C.sub }}>{label}</div>
+      <div className="mt-0.5 text-[13px] font-semibold break-words" style={{ color: highlight ? C.green : C.text }}>{value}</div>
+    </div>
+  );
+}
+
+function MapScreen({ go, back, ctx, setQuery, resetFilters, showToast }) {
+  const [selectedId, setSelectedId] = useState("kimchi");
+  const [mapFilter, setMapFilter] = useState("All");
+  const [mapZoom, setMapZoom] = useState(1);
+
+  const baseMapWidth = 620;
+  const baseMapHeight = 720;
+
+  // Coordinates are on a larger fake map canvas so the user can pan around.
+  // They intentionally stay away from the bottom card safe zone.
+  const pinLayout = {
+    kimchi: { left: 330, top: 230 },
+    market: { left: 190, top: 325 },
+    pasta: { left: 475, top: 320 },
+    seoul: { left: 350, top: 450 },
+    jerk: { left: 155, top: 505 },
+    sushi: { left: 520, top: 190 },
+  };
+
+  const mapPlaces = LIST.filter((p) => {
+    if (mapFilter === "Restaurants") return p.type === "restaurant";
+    if (mapFilter === "Grocery") return p.type === "grocery";
+    if (mapFilter === "Open Now") return p.openNow;
+    if (mapFilter === "Certified") return p.certified;
+    return true;
+  });
+
+  const selected = mapPlaces.find((p) => p.id === selectedId) || mapPlaces[0] || PLACES.kimchi;
+
+  useEffect(() => {
+    if (!mapPlaces.some((p) => p.id === selectedId) && mapPlaces.length > 0) {
+      setSelectedId(mapPlaces[0].id);
+    }
+  }, [mapFilter, mapPlaces, selectedId]);
+
+  const openListFromMap = () => {
+    resetFilters?.();
+    setQuery?.("");
+    go("list");
+  };
+
+  const viewSelectedDetails = () => {
+    ctx.setActive(selected);
+    go(selected.type === "grocery" ? "grocery" : "restaurant");
+  };
+
+  const zoomIn = () => {
+    setMapZoom((z) => {
+      const next = Math.min(1.5, Number((z + 0.15).toFixed(2)));
+      if (next === z) showToast?.("Maximum map zoom reached");
+      return next;
+    });
+  };
+
+  const zoomOut = () => {
+    setMapZoom((z) => {
+      const next = Math.max(0.75, Number((z - 0.15).toFixed(2)));
+      if (next === z) showToast?.("Minimum map zoom reached");
+      return next;
+    });
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col" style={{ background: "#DDE5DC" }}>
       <StatusBar />
       <div className="px-4 pb-2 pt-1">
         <div className="flex items-center gap-2">
-          <button onClick={() => go("home")} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow">
+          <button onClick={back} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow" aria-label="Go back">
             <ChevronLeft size={20} color={C.text} />
           </button>
-          <div className="flex flex-1 items-center gap-2 rounded-full bg-white px-3.5 py-2.5 shadow">
-            <Search size={15} color={C.faint} />
-            <span className="text-[13px]" style={{ color: C.faint }}>Search halal near me</span>
-          </div>
-          <button onClick={() => go("list")} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow">
+          <button onClick={openListFromMap} className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-white px-3.5 py-2.5 text-left shadow">
+            <Search size={15} color={C.faint} className="shrink-0" />
+            <span className="truncate text-[13px]" style={{ color: C.faint }}>Search halal near me</span>
+          </button>
+          <button onClick={openListFromMap} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow" aria-label="Open list view">
             <List size={18} color={C.text} />
           </button>
         </div>
         <div className="mt-2 flex items-center gap-1 text-[12px] font-semibold" style={{ color: C.greenDeep }}>
-          <span className="h-2 w-2 rounded-full" style={{ background: C.green }} /> Downtown, Toronto
+          <span className="h-2 w-2 rounded-full" style={{ background: C.green }} /> Downtown, Toronto • {mapPlaces.length} place{mapPlaces.length !== 1 ? "s" : ""}
         </div>
-        <div className="mt-2 flex gap-2">
-          {["Certified Only", "Open Now", "Cuisine"].map((f, i) => (
-            <span key={f} className="whitespace-nowrap rounded-full px-3 py-1.5 text-[12px] font-semibold shadow-sm"
-              style={i === 0 ? { background: C.green, color: "#fff" } : { background: "#fff", color: C.sub }}>{f}</span>
-          ))}
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+          {["All", "Certified", "Open Now", "Restaurants", "Grocery"].map((f) => {
+            const active = mapFilter === f;
+            return (
+              <button
+                key={f}
+                onClick={() => setMapFilter(f)}
+                className="shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[12px] font-semibold shadow-sm"
+                style={active ? { background: C.green, color: "#fff" } : { background: "#fff", color: C.sub }}
+              >
+                {f}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="relative flex-1 overflow-hidden">
-        <div className="absolute inset-0 opacity-40"
-          style={{ backgroundImage: "linear-gradient(#cdd6cb 1px, transparent 1px), linear-gradient(90deg, #cdd6cb 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-        <div className="absolute left-1/2 top-1/3 -translate-x-1/2 flex h-12 w-12 items-center justify-center rounded-full shadow-lg" style={{ background: C.green }}>
-          <MapPin size={22} color="#fff" />
-        </div>
-        <div className="absolute inset-x-3 bottom-3 rounded-2xl bg-white p-4 shadow-xl">
-          <div className="text-[15px] font-bold" style={{ color: C.text }}>Kimchi House Korean BBQ</div>
-          <div className="text-[12px]" style={{ color: C.sub }}>Korean</div>
-          <div className="mt-1.5"><CertPill label="Halal Certified" /></div>
-          <div className="mt-2 flex items-center gap-2 text-[12px]" style={{ color: C.sub }}>
-            <Navigation size={12} color={C.green} /> {PLACES.kimchi.rating} • {PLACES.kimchi.price} • {PLACES.kimchi.distance} • {PLACES.kimchi.time}
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div className="absolute inset-0 overflow-auto overscroll-contain pb-56 pr-8">
+          <div
+            className="relative"
+            style={{
+              width: baseMapWidth * mapZoom,
+              height: baseMapHeight * mapZoom,
+              minWidth: "100%",
+              minHeight: "100%",
+            }}
+          >
+            <div
+              className="relative h-[720px] w-[620px]"
+              style={{
+                transform: `scale(${mapZoom})`,
+                transformOrigin: "top left",
+                backgroundColor: "#DDE5DC",
+                backgroundImage: "linear-gradient(#cdd6cb 1px, transparent 1px), linear-gradient(90deg, #cdd6cb 1px, transparent 1px)",
+                backgroundSize: "44px 44px",
+              }}
+            >
+              <div className="absolute left-[120px] top-[135px] h-[360px] w-[380px] rounded-[42px] border border-white/60 opacity-55" />
+              <div className="absolute left-[70px] top-[270px] h-5 w-[470px] rounded-full bg-white/35" />
+              <div className="absolute left-[300px] top-[80px] h-[435px] w-5 rounded-full bg-white/35" />
+              <div className="absolute left-[115px] top-[560px] h-4 w-[405px] -rotate-12 rounded-full bg-white/30" />
+              <div className="absolute left-[420px] top-[100px] h-[300px] w-4 rotate-45 rounded-full bg-white/25" />
+
+              {mapPlaces.map((p) => {
+                const pos = pinLayout[p.id] || { left: 310, top: 310 };
+                const isSelected = selected.id === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedId(p.id)}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 transition-transform active:scale-95"
+                    style={{ left: pos.left, top: pos.top, zIndex: isSelected ? 12 : 8 }}
+                    aria-label={`Select ${p.name}`}
+                  >
+                    <span
+                      className="flex items-center justify-center rounded-full shadow-lg"
+                      style={{
+                        width: isSelected ? 48 : 38,
+                        height: isSelected ? 48 : 38,
+                        background: isSelected ? C.green : "#fff",
+                        border: `3px solid ${isSelected ? "#fff" : C.green}`,
+                      }}
+                    >
+                      <MapPin size={isSelected ? 23 : 19} color={isSelected ? "#fff" : C.green} fill={isSelected ? "#ffffff22" : "transparent"} />
+                    </span>
+                    {isSelected && (
+                      <span className="mt-1 block max-w-[100px] truncate rounded-full bg-white px-2 py-[2px] text-[10px] font-semibold shadow" style={{ color: C.text }}>
+                        {p.name}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <button onClick={() => { ctx.setActive(PLACES.kimchi); go("restaurant"); }}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[14px] font-semibold text-white" style={{ background: C.green }}>
-            <Navigation size={15} /> View Details
+        </div>
+
+        <div className="absolute right-4 top-4 z-20 flex flex-col items-center gap-2">
+          <button
+            onClick={() => showToast?.("Map recentered to Downtown, Toronto")}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-lg"
+            aria-label="Recenter map"
+          >
+            <LocateFixed size={19} color={C.green} />
           </button>
+
+          <div className="overflow-hidden rounded-full bg-white shadow-lg">
+            <button
+              onClick={zoomIn}
+              className="flex h-9 w-11 items-center justify-center text-[20px] font-bold"
+              style={{ color: C.green }}
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <div className="border-y px-2 py-1 text-center text-[10px] font-semibold" style={{ borderColor: C.line, color: C.sub }}>
+              {Math.round(mapZoom * 100)}%
+            </div>
+            <button
+              onClick={zoomOut}
+              className="flex h-9 w-11 items-center justify-center text-[22px] font-bold"
+              style={{ color: C.green }}
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+          </div>
+        </div>
+
+        <div className="absolute inset-x-3 bottom-3 z-30 rounded-2xl bg-white p-4 shadow-xl">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[15px] font-bold" style={{ color: C.text }}>{selected.name}</div>
+              <div className="text-[12px]" style={{ color: C.sub }}>{selected.cuisine}</div>
+            </div>
+            <span className="shrink-0 rounded-md px-2 py-[2px] text-[10px] font-bold" style={{ background: selected.type === "grocery" ? "#E7EEFB" : C.certBg, color: selected.type === "grocery" ? "#5B8DEF" : C.certText }}>
+              {selected.type === "grocery" ? "Grocery" : "Restaurant"}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-2">
+            {selected.certified && <CertPill label="Halal Certified" />}
+            <span className="text-[11px]" style={{ color: selected.openNow ? C.green : C.faint }}>{selected.openNow ? "Open now" : "Closed"}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]" style={{ color: C.sub }}>
+            <Stars rating={selected.rating} reviews={null} size={12} />
+            <span>•</span><span>{selected.price}</span><span>•</span><span>{selected.distance}</span><span>•</span><span>{selected.time}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-1 text-[11px]" style={{ color: C.faint }}>
+            <MapPin size={11} className="shrink-0" /> <span className="truncate">{selected.address}</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button onClick={viewSelectedDetails}
+              className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[14px] font-semibold text-white" style={{ background: C.green }}>
+              <Navigation size={15} /> View Details
+            </button>
+            <button onClick={() => ctx.openDirections(selected)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border py-2.5 text-[14px] font-semibold" style={{ borderColor: C.green, color: C.green }}>
+              <MapIcon size={15} /> Directions
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -760,24 +1341,193 @@ function PhotosScreen({ back }) {
   );
 }
 
-function ReviewsScreen({ back }) {
+function PlaceReviewsScreen({ back, go, ctx, userReviews = [] }) {
+  const p = ctx.active || PLACES.kimchi;
+  const matchingUserReviews = userReviews.filter((r) => r.place === p.name);
+  const sampleReviews = [
+    {
+      id: `${p.id}-sample-1`,
+      place: p.name,
+      away: p.distance,
+      stars: Math.round(p.rating),
+      date: "Nov 20, 2025",
+      text: "Helpful certification details and a smooth experience. I liked being able to check the halal information before visiting.",
+      type: p.type === "grocery" ? "Grocery" : "Restaurant",
+    },
+    {
+      id: `${p.id}-sample-2`,
+      place: p.name,
+      away: p.distance,
+      stars: Math.max(4, Math.round(p.rating) - 1),
+      date: "Nov 12, 2025",
+      text: p.type === "grocery"
+        ? "Good halal grocery selection and easy to compare with nearby options."
+        : "Good food and the halal certification card made the choice feel more trustworthy.",
+      type: p.type === "grocery" ? "Grocery" : "Restaurant",
+    },
+  ];
+  const reviews = [...matchingUserReviews, ...sampleReviews];
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <StatusBar />
+      <BackHeader title="Reviews" back={back} />
+
+      <div className="shrink-0 px-4 -mt-1 pb-3">
+        <div className="text-[16px] font-bold" style={{ color: C.text }}>{p.name}</div>
+        <div className="mt-1 flex items-center gap-2 text-[12px]" style={{ color: C.sub }}>
+          <Stars rating={p.rating} reviews={p.reviews} size={12} />
+          <span>•</span>
+          <span>{p.cuisine}</span>
+        </div>
+        <button
+          onClick={() => go("writeReview")}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[14px] font-semibold text-white"
+          style={{ background: C.green }}
+        >
+          <MessageSquare size={17} /> Write a Review
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-20">
+        {reviews.map((r, idx) => (
+          <div key={r.id || `${r.place}-${idx}`} className="rounded-2xl border p-4" style={{ borderColor: r.userCreated ? C.green : C.line, background: r.userCreated ? "#F7FCF9" : "#fff" }}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-[14px] font-bold" style={{ color: C.text }}>{r.place}</div>
+              {r.userCreated && (
+                <span className="rounded-full px-2 py-[1px] text-[10px] font-bold" style={{ background: C.certBg, color: C.certText }}>New</span>
+              )}
+            </div>
+            <div className="mt-0.5 flex items-center gap-2 text-[11px]">
+              <span className="rounded px-1.5 py-[1px] font-semibold" style={{ background: C.certBg, color: C.certText }}>{r.type || (p.type === "grocery" ? "Grocery" : "Restaurant")}</span>
+              <span style={{ color: C.faint }}>📍 {r.away || p.distance}</span>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span>{Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} size={13} className="inline" fill={i < r.stars ? C.star : "transparent"} color={i < r.stars ? C.star : "#D1D5DB"} />
+              ))}</span>
+              <span className="text-[11px]" style={{ color: C.faint }}>{r.date}</span>
+            </div>
+            <div className="mt-1.5 text-[12px] leading-relaxed" style={{ color: C.sub }}>{r.text}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WriteReviewScreen({ back, go, ctx, addReview, showToast }) {
+  const place = ctx.active || PLACES.kimchi;
+  const [rating, setRating] = useState(5);
+  const [text, setText] = useState("");
+
+  const submit = () => {
+    const trimmed = text.trim();
+
+    if (!rating) {
+      showToast("Please select a star rating");
+      return;
+    }
+
+    if (trimmed.length < 10) {
+      showToast("Please write a short review first");
+      return;
+    }
+
+    addReview({
+      id: `review-${Date.now()}`,
+      place: place.name,
+      away: place.distance || "Nearby",
+      stars: rating,
+      date: "Today",
+      text: trimmed,
+      type: place.type === "grocery" ? "Grocery" : "Restaurant",
+      userCreated: true,
+    });
+
+    go("reviews");
+  };
+
   return (
     <div className="flex h-full flex-col bg-white">
       <StatusBar />
+      <BackHeader title="Write a Review" back={back} />
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4 -mt-1">
+        <div className="rounded-2xl border p-4" style={{ borderColor: C.line, boxShadow: C.cardShadow }}>
+          <div className="text-[14px] font-bold" style={{ color: C.text }}>{place.name}</div>
+          <div className="mt-0.5 text-[12px]" style={{ color: C.sub }}>{place.cuisine} • {place.distance}</div>
+          <div className="mt-2"><CertPill label="Halal Certified" /></div>
+        </div>
+
+        <div className="mt-5">
+          <div className="text-[14px] font-bold" style={{ color: C.text }}>How was your experience?</div>
+          <div className="mt-3 flex gap-2">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                onClick={() => setRating(n)}
+                className="flex h-11 w-11 items-center justify-center rounded-xl border"
+                style={{ borderColor: n <= rating ? C.star : C.line, background: n <= rating ? "#FEF7E6" : "#fff" }}
+                aria-label={`${n} star rating`}
+              >
+                <Star size={22} fill={n <= rating ? C.star : "transparent"} color={n <= rating ? C.star : C.faint} />
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 text-[12px]" style={{ color: C.sub }}>{rating} out of 5 stars</div>
+        </div>
+
+        <div className="mt-5">
+          <label className="text-[14px] font-bold" style={{ color: C.text }}>Write your review</label>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Share what stood out, such as food quality, service, certification confidence, or grocery selection."
+            className="mt-2 h-40 w-full resize-none rounded-2xl border bg-white p-3 text-[13px] leading-relaxed outline-none"
+            style={{ borderColor: C.line, color: C.text }}
+          />
+          <div className="mt-1 text-[11px]" style={{ color: C.faint }}>Minimum 10 characters for this prototype.</div>
+        </div>
+      </div>
+
+      <div className="border-t px-4 py-3" style={{ borderColor: C.line }}>
+        <PrimaryBtn icon={MessageSquare} onClick={submit}>Post Review</PrimaryBtn>
+      </div>
+    </div>
+  );
+}
+
+function ReviewsScreen({ back, userReviews = [] }) {
+  const allReviews = [...userReviews, ...REVIEWS];
+  const avg = allReviews.length
+    ? (allReviews.reduce((sum, r) => sum + Number(r.stars || 0), 0) / allReviews.length).toFixed(1)
+    : "0.0";
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <StatusBar />
       <BackHeader title="" back={back} />
-      <div className="flex items-center justify-between px-4 -mt-1">
+      <div className="shrink-0 flex items-center justify-between px-4 -mt-1">
         <div>
           <div className="text-[15px] font-bold" style={{ color: C.text }}>My Reviews</div>
-          <div className="text-[12px]" style={{ color: C.sub }}>3 reviews written</div>
+          <div className="text-[12px]" style={{ color: C.sub }}>{allReviews.length} review{allReviews.length !== 1 ? "s" : ""} written</div>
         </div>
-        <Stars rating={4.8} reviews={null} />
+        <Stars rating={avg} reviews={null} />
       </div>
-      <div className="mt-3 flex-1 space-y-3 overflow-y-auto px-4 pb-4">
-        {REVIEWS.map((r) => (
-          <div key={r.place} className="rounded-2xl border p-4" style={{ borderColor: C.line }}>
-            <div className="text-[14px] font-bold" style={{ color: C.text }}>{r.place}</div>
+      <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-20">
+        {allReviews.map((r, idx) => (
+          <div key={r.id || `${r.place}-${idx}`} className="rounded-2xl border p-4" style={{ borderColor: r.userCreated ? C.green : C.line, background: r.userCreated ? "#F7FCF9" : "#fff" }}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-[14px] font-bold" style={{ color: C.text }}>{r.place}</div>
+              {r.userCreated && (
+                <span className="rounded-full px-2 py-[1px] text-[10px] font-bold" style={{ background: C.certBg, color: C.certText }}>
+                  New
+                </span>
+              )}
+            </div>
             <div className="mt-0.5 flex items-center gap-2 text-[11px]">
-              <span className="rounded px-1.5 py-[1px] font-semibold" style={{ background: C.certBg, color: C.certText }}>Restaurant</span>
+              <span className="rounded px-1.5 py-[1px] font-semibold" style={{ background: C.certBg, color: C.certText }}>{r.type || "Restaurant"}</span>
               <span style={{ color: C.faint }}>📍 {r.away}</span>
             </div>
             <div className="mt-2 flex items-center gap-2">
@@ -794,7 +1544,7 @@ function ReviewsScreen({ back }) {
   );
 }
 
-function NotificationsScreen({ back }) {
+function NotificationsScreen({ back, showToast }) {
   return (
     <div className="flex h-full flex-col bg-white">
       <StatusBar />
@@ -821,13 +1571,19 @@ function NotificationsScreen({ back }) {
         ))}
       </div>
       <div className="border-t px-4 py-3" style={{ borderColor: C.line }}>
-        <button className="w-full rounded-xl py-2.5 text-[13px] font-semibold" style={{ background: "#F3F4F6", color: C.sub }}>Mark all as read</button>
+        <button
+          onClick={() => showToast("All notifications marked as read") }
+          className="w-full rounded-xl py-2.5 text-[13px] font-semibold"
+          style={{ background: "#F3F4F6", color: C.sub }}
+        >
+          Mark all as read
+        </button>
       </div>
     </div>
   );
 }
 
-function SettingsScreen({ back, go }) {
+function SettingsScreen({ back, go, showToast }) {
   const [toggles, setToggles] = useState({ reviews: true, photos: true, location: true, activity: false });
   const flip = (k) => setToggles((t) => ({ ...t, [k]: !t[k] }));
   return (
@@ -836,8 +1592,8 @@ function SettingsScreen({ back, go }) {
       <BackHeader title="" back={back} />
       <div className="flex-1 overflow-y-auto px-4 pb-4 -mt-1">
         <SettingsGroup label="Account Security" sub="Privacy & Security">
-          <SettingRow icon={Lock} label="Change Password" />
-          <SettingRow icon={Shield} label="Two-Factor Authentication" />
+          <SettingRow icon={Lock} label="Change Password" onClick={() => showToast("Password change is not available in this prototype")} />
+          <SettingRow icon={Shield} label="Two-Factor Authentication" onClick={() => showToast("Two-factor authentication is not available in this prototype")} />
         </SettingsGroup>
         <SettingsGroup label="Privacy Settings">
           <ToggleRow icon={Eye} label="Show Reviews Publicly" sub="Others can see your reviews" on={toggles.reviews} onClick={() => flip("reviews")} />
@@ -846,8 +1602,8 @@ function SettingsScreen({ back, go }) {
           <ToggleRow icon={Activity} label="Show Activity Status" sub="Let others see when you're active" on={toggles.activity} onClick={() => flip("activity")} />
         </SettingsGroup>
         <SettingsGroup label="Data Management">
-          <SettingRow icon={Download} label="Download My Data" />
-          <SettingRow icon={Trash2} label="Delete Account" danger />
+          <SettingRow icon={Download} label="Download My Data" onClick={() => showToast("Prototype data download prepared")} />
+          <SettingRow icon={Trash2} label="Delete Account" danger onClick={() => showToast("Account deletion is disabled in this prototype")} />
         </SettingsGroup>
       </div>
     </div>
@@ -862,9 +1618,9 @@ function SettingsGroup({ label, sub, children }) {
     </div>
   );
 }
-function SettingRow({ icon: Icon, label, danger }) {
+function SettingRow({ icon: Icon, label, danger, onClick }) {
   return (
-    <button className="flex w-full items-center gap-3 py-3">
+    <button onClick={onClick} className="flex w-full items-center gap-3 py-3">
       <Icon size={17} color={danger ? "#DC2626" : C.sub} />
       <span className="flex-1 text-left text-[14px]" style={{ color: danger ? "#DC2626" : C.text }}>{label}</span>
       <ChevronRight size={16} color={C.faint} />
@@ -924,7 +1680,7 @@ function AboutScreen({ back }) {
   );
 }
 
-function HelpScreen({ back }) {
+function HelpScreen({ back, showToast }) {
   const [open, setOpen] = useState(null);
   return (
     <div className="flex h-full flex-col bg-white">
@@ -937,8 +1693,17 @@ function HelpScreen({ back }) {
         </div>
         <div className="mt-4 text-[13px] font-bold" style={{ color: C.text }}>Contact Support</div>
         <div className="mt-2 grid grid-cols-3 gap-3">
-          {[{ i: MessageCircle, l: "Chat" }, { i: Mail, l: "Email" }, { i: Phone, l: "Call" }].map((x) => (
-            <button key={x.l} className="flex flex-col items-center gap-1.5 rounded-2xl border py-3" style={{ borderColor: C.line }}>
+          {[
+            { i: MessageCircle, l: "Chat", m: "Prototype support chat opened" },
+            { i: Mail, l: "Email", m: "Prototype support email opened" },
+            { i: Phone, l: "Call", m: "Prototype support call started" },
+          ].map((x) => (
+            <button
+              key={x.l}
+              onClick={() => showToast(x.m)}
+              className="flex flex-col items-center gap-1.5 rounded-2xl border py-3"
+              style={{ borderColor: C.line }}
+            >
               <x.i size={20} color={C.green} />
               <span className="text-[12px]" style={{ color: C.text }}>{x.l}</span>
             </button>
@@ -949,11 +1714,24 @@ function HelpScreen({ back }) {
             <div className="text-[13px] font-bold" style={{ color: C.text }}>{sec}</div>
             <div className="mt-2 space-y-2">
               {FAQ.filter((f) => f.section === sec).map((f) => (
-                <button key={f.q} onClick={() => setOpen(open === f.q ? null : f.q)}
-                  className="flex w-full items-center justify-between rounded-xl border px-3.5 py-3 text-left" style={{ borderColor: C.line }}>
-                  <span className="text-[13px]" style={{ color: C.text }}>{f.q}</span>
-                  <ChevronDown size={16} color={C.faint} style={{ transform: open === f.q ? "rotate(180deg)" : "none" }} />
-                </button>
+                <div
+                  key={f.q}
+                  className="rounded-xl border"
+                  style={{ borderColor: C.line }}
+                >
+                  <button
+                    onClick={() => setOpen(open === f.q ? null : f.q)}
+                    className="flex w-full items-center justify-between px-3.5 py-3 text-left"
+                  >
+                    <span className="text-[13px]" style={{ color: C.text }}>{f.q}</span>
+                    <ChevronDown size={16} color={C.faint} style={{ transform: open === f.q ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open === f.q && (
+                    <div className="px-3.5 pb-3 text-[12px] leading-relaxed" style={{ color: C.sub }}>
+                      {f.a}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -979,7 +1757,7 @@ function Field({ label, placeholder, type = "text", icon: Icon, hint }) {
   );
 }
 
-function SignIn({ back, go }) {
+function SignIn({ back, go, showToast }) {
   return (
     <div className="flex h-full flex-col bg-white">
       <StatusBar />
@@ -996,8 +1774,8 @@ function SignIn({ back, go }) {
           <span className="text-[12px]" style={{ color: C.faint }}>or</span>
           <div className="h-px flex-1" style={{ background: C.line }} />
         </div>
-        <OAuth label="Continue with Google" />
-        <OAuth label="Continue with Apple" dark />
+        <OAuth label="Continue with Google" showToast={showToast} />
+        <OAuth label="Continue with Apple" dark showToast={showToast} />
         <div className="mt-5 text-center text-[12px]" style={{ color: C.sub }}>
           Don't have an account? <button onClick={() => go("signup")} className="font-semibold" style={{ color: C.green }}>Sign up</button>
         </div>
@@ -1005,9 +1783,13 @@ function SignIn({ back, go }) {
     </div>
   );
 }
-function OAuth({ label, dark }) {
+function OAuth({ label, dark, showToast }) {
   return (
-    <button className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-[14px] font-semibold" style={{ borderColor: C.line, color: C.text }}>
+    <button
+      onClick={() => showToast("Social sign-in is not available in this prototype")}
+      className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-[14px] font-semibold"
+      style={{ borderColor: C.line, color: C.text }}
+    >
       <span className="h-4 w-4 rounded-sm" style={{ background: dark ? "#111" : "#EA4335" }} />{label}
     </button>
   );
@@ -1060,43 +1842,200 @@ function Forgot({ back, go }) {
 
 /* ----------------------- app shell ----------------------- */
 
+const DEFAULT_SAVED_IDS = ["pasta", "kimchi", "market"];
+const SAVED_STORAGE_KEY = "halalCompassSavedPlaces";
+const REVIEWS_STORAGE_KEY = "halalCompassUserReviews";
+
+function getInitialSavedPlaces() {
+  if (typeof window === "undefined") return new Set(DEFAULT_SAVED_IDS);
+
+  try {
+    const stored = window.localStorage.getItem(SAVED_STORAGE_KEY);
+    if (!stored) return new Set(DEFAULT_SAVED_IDS);
+
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return new Set(DEFAULT_SAVED_IDS);
+
+    return new Set(parsed.filter((id) => LIST.some((place) => place.id === id)));
+  } catch {
+    return new Set(DEFAULT_SAVED_IDS);
+  }
+}
+
+function savePlacesToStorage(savedSet) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(Array.from(savedSet)));
+  } catch {
+    // Local storage may be unavailable in some browser privacy modes.
+  }
+}
+
+function getInitialUserReviews() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const stored = window.localStorage.getItem(REVIEWS_STORAGE_KEY);
+    if (!stored) return [];
+
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((review) => review && review.place && review.text);
+  } catch {
+    return [];
+  }
+}
+
+function saveReviewsToStorage(reviews) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(reviews));
+  } catch {
+    // Local storage may be unavailable in some browser privacy modes.
+  }
+}
+
 const TAB_ROOTS = { home: "home", list: "home", map: "map", saved: "saved", profile: "profile" };
-const NO_NAV = new Set(["landing", "filter", "restaurant", "grocery", "certificate", "signin", "signup", "forgot", "photos", "reviews", "notifications", "settings", "about", "help"]);
+const NO_NAV = new Set(["landing", "filter", "restaurant", "grocery", "certificate", "signin", "signup", "forgot", "photos", "reviews", "placeReviews", "writeReview", "notifications", "settings", "about", "help"]);
 
 export default function App() {
   const [stack, setStack] = useState(["landing"]);
   const [active, setActive] = useState(null);
-  const [saved, setSaved] = useState(new Set(["pasta", "kimchi", "market"]));
+  const [saved, setSaved] = useState(getInitialSavedPlaces);
+  const [toast, setToast] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [userReviews, setUserReviews] = useState(getInitialUserReviews);
+
+  useEffect(() => {
+    savePlacesToStorage(saved);
+  }, [saved]);
+
+  useEffect(() => {
+    saveReviewsToStorage(userReviews);
+  }, [userReviews]);
+
+  useEffect(() => {
+    if (!toast) return;
+
+    const timer = window.setTimeout(() => setToast(""), 1800);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const screen = stack[stack.length - 1];
   const go = (s) => {
-    if (["home", "map", "saved", "profile"].includes(s)) setStack([s]);
-    else setStack((st) => [...st, s]);
+    if (["home", "saved", "profile"].includes(s)) {
+      setStack([s]);
+    } else {
+      setStack((st) => [...st, s]);
+    }
   };
-  const back = () => setStack((st) => (st.length > 1 ? st.slice(0, -1) : st));
-  const toggleSave = (id) => setSaved((s) => {
-    const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n;
-  });
-  const ctx = { active, setActive, saved, toggleSave };
+
+  const goTab = (s) => {
+    setStack([s]);
+  };
+
+  const resetFilters = () => {
+    setFilters(DEFAULT_FILTERS);
+  };
+
+  const back = () =>
+    setStack((st) => {
+      if (st.length > 1) return st.slice(0, -1);
+      if (st[0] !== "home" && st[0] !== "landing") return ["home"];
+      return st;
+    });
+  const applyFilters = (nextFilters) => {
+    trackEvent("filters_applied", {
+      certified_only: nextFilters.certOnly,
+      place_type: nextFilters.placeType,
+      open_now: nextFilters.openNow,
+      cuisines: nextFilters.cuisines.join(",") || "none",
+    });
+    setFilters(nextFilters);
+    setToast("Filters applied");
+    setStack((st) => {
+      if (st[st.length - 2] === "list") return st.slice(0, -1);
+      return [...st.slice(0, -1), "list"];
+    });
+  };
+
+  const toggleSave = (id) => {
+    const place = LIST.find((p) => p.id === id);
+
+    setSaved((s) => {
+      const next = new Set(s);
+      const alreadySaved = next.has(id);
+
+      if (alreadySaved) {
+        next.delete(id);
+        setToast(`${place?.name || "Place"} removed from saved`);
+      } else {
+        trackEvent("place_saved", {
+          place_id: id,
+          place_name: place?.name || "Unknown place",
+          place_type: place?.type || "unknown",
+        });
+        next.add(id);
+        setToast(`${place?.name || "Place"} saved`);
+      }
+
+      return next;
+    });
+  };
+
+  const openDirections = (place) => {
+    if (!place) return;
+
+    const query = encodeURIComponent(`${place.name} ${place.address || "Toronto"}`);
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+
+    trackEvent("directions_clicked", {
+      place_id: place.id,
+      place_name: place.name,
+      place_type: place.type,
+      address: place.address || "Toronto",
+    });
+    setToast("Opening directions in Google Maps...");
+    window.open(mapsUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const addReview = (review) => {
+    trackEvent("review_posted", {
+      place_name: review.place,
+      place_type: review.type || "unknown",
+      rating: review.stars,
+      review_length: review.text?.length || 0,
+    });
+    setUserReviews((existing) => [review, ...existing]);
+    setToast("Review posted");
+  };
+
+  const ctx = { active, setActive, saved, toggleSave, openDirections };
 
   const screens = {
     landing: <Landing go={go} />,
-    home: <HomeScreen go={go} />,
-    list: <ListScreen go={go} ctx={ctx} />,
-    filter: <FilterScreen go={go} back={back} />,
+    home: <HomeScreen go={go} setQuery={setSearchQuery} resetFilters={resetFilters} />,
+    list: <ListScreen go={go} back={back} ctx={ctx} query={searchQuery} setQuery={setSearchQuery} filters={filters} setFilters={setFilters} />,
+    filter: <FilterScreen back={back} filters={filters} applyFilters={applyFilters} />,
     restaurant: <RestaurantDetails go={go} back={back} ctx={ctx} />,
     grocery: <GroceryDetails go={go} back={back} ctx={ctx} />,
     certificate: <CertificateScreen back={back} ctx={ctx} />,
-    map: <MapScreen go={go} ctx={ctx} />,
+    map: <MapScreen go={go} back={back} ctx={ctx} setQuery={setSearchQuery} resetFilters={resetFilters} showToast={setToast} />,
     saved: <SavedScreen go={go} ctx={ctx} />,
     profile: <ProfileScreen go={go} />,
     photos: <PhotosScreen back={back} />,
-    reviews: <ReviewsScreen back={back} />,
-    notifications: <NotificationsScreen back={back} />,
-    settings: <SettingsScreen back={back} go={go} />,
+    reviews: <ReviewsScreen back={back} userReviews={userReviews} />,
+    placeReviews: <PlaceReviewsScreen back={back} go={go} ctx={ctx} userReviews={userReviews} />,
+    writeReview: <WriteReviewScreen back={back} go={go} ctx={ctx} addReview={addReview} showToast={setToast} />,
+    notifications: <NotificationsScreen back={back} showToast={setToast} />,
+    settings: <SettingsScreen back={back} go={go} showToast={setToast} />,
     about: <AboutScreen back={back} />,
-    help: <HelpScreen back={back} />,
-    signin: <SignIn back={back} go={go} />,
+    help: <HelpScreen back={back} showToast={setToast} />,
+    signin: <SignIn back={back} go={go} showToast={setToast} />,
     signup: <SignUp back={back} go={go} />,
     forgot: <Forgot back={back} go={go} />,
   };
@@ -1112,8 +2051,9 @@ export default function App() {
         <div className="absolute left-1/2 top-0 z-20 h-6 w-36 -translate-x-1/2 rounded-b-2xl bg-black" />
         <div className="flex h-full flex-col">
           <div className="flex-1 overflow-hidden">{screens[screen]}</div>
-          {showNav && <BottomNav active={activeTab} go={go} />}
+          {showNav && <BottomNav active={activeTab} go={goTab} />}
         </div>
+        <Toast message={toast} />
       </div>
     </div>
   );
